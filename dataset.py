@@ -11,60 +11,15 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
     
 
     def __init__(self, 
-                 batch_size,
-                 window_size,
-                 dwt_levels,
-                 data_path):
+                 batch_size : int,
+                 window_size : int,
+                 dwt_levels : int,
+                 data_description : list[tuple[str, int]]):
         self.window_size = window_size
         self.dwt_levels = dwt_levels
         self.batch_size = batch_size
-        self.data_path = data_path
         
-        self.annot_files = []
-        self.all_windows : list[tuple[str, int]] = []
-
-        self.read_data_directory()
-
-
-    def read_data_directory(self):
-        all_annotations = glob.glob(os.path.join(self.data_path, "*.xml"))
-        invalid_xml = 0
-
-        def check_path(path : str):
-            global invalid_xml
-            try:
-                tree = et.parse(path)
-            except:
-                invalid_xml += 1
-                return False
-            
-            root = tree.getroot()
-            image_name = root.findtext("filename")
-            image_path = os.path.join(self.images_path, image_name)
-            discard_path = False
-            if not os.path.exists(image_path):
-                print(f"Image {image_path} associated to {path} not found...")
-                print(f"Discarding {path}...")
-                discard_path = True
-
-            return not discard_path
-
-        #Filtra gli xml non correttamente formattati e quelli che non hanno l'immagine corrispondente (capiterà?)
-        self.annot_files = list(filter(check_path, all_annotations))
-        print(f"XML INVALIDI: {invalid_xml}")
-
-        #Per ogni annotation, vediti la size della matrice per determinare la quantità di windows prodotte da quella matrice
-        for annot_file in self.annot_files:
-            tree = et.parse(annot_file)
-            root = tree.getroot()
-            width = int(root.find("size").findtext("width"))
-            if width < self.window_size:
-                raise ValueError(f"Width {width} of file {annot_file} is less than window_size {self.window_size}")
-            
-            for offset in range(width - self.window_size):
-                self.all_windows.append((annot_file, offset))
-
-
+        self.all_windows : list[tuple[str, int]] = data_description
 
 
     def read_matrix_chunk_and_prepare_labels(self, path : str, offsets: list[int]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
