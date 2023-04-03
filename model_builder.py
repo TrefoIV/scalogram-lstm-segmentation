@@ -1,15 +1,9 @@
 from keras.layers import (
-    Layer,
-    Dense,
     Input,
-    LSTM,
-    TimeDistributed,
-    Bidirectional,
-    GlobalMaxPool1D,
-    BatchNormalization
+    LSTM
 )
+from keras.losses import BinaryCrossentropy
 from keras.models import Model
-from keras.models import Sequential 
 
 
 class ScalogramSegmentationLSTMModelBuilder:
@@ -22,17 +16,17 @@ class ScalogramSegmentationLSTMModelBuilder:
         self.dwt_levels = dwt_levels
 
     def build_network(self):
-        scalogram_fragments = (self.window_size, self.dwt_levels)
+        inputs = Input(shape=(self.window_size, self.dwt_levels))
 
-        lstm_layer = LSTM(
+        lstm_out = LSTM(
                     units=1,
                     return_sequences=True,
-                    input_shape = scalogram_fragments
-                )
-        model = Sequential()
-        model.add(lstm_layer)
-        return model
+                )(inputs)
+        model = Model(inputs, lstm_out)
 
-builder = ScalogramSegmentationLSTMModelBuilder(1000, 15)
-m = builder.build_network()
-print(m.summary())
+        model.compile(optimizer="adam", loss=BinaryCrossentropy())
+        return model
+if __name__ == "__main__":
+    builder = ScalogramSegmentationLSTMModelBuilder(1000, 15)
+    m = builder.build_network()
+    print(m.summary())
