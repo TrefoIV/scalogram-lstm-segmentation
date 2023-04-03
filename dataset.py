@@ -23,11 +23,6 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
         self.annot_files = []
         self.all_windows : list[tuple[str, int]] = []
 
-        self.current_annot_file_index = 0
-        self.current_matrix = None
-        self.curren_timestamp = 0
-        self.block_ends = None
-
         self.read_data_directory()
 
 
@@ -72,45 +67,76 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
 
 
 
-    def read_matrix_file(self, path : str):
+    def read_matrix_chunk_and_prepare_labels(self, path : str, offsets: list[int]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+        '''
+        Read all specified matrix chunks. Returns a dictionary of int -> tuple[chunk, labels].
+        Each key is a specific offset, and the corresponding value is a tuple with the matrix chunk and
+        an empty label vector.
+        Each chunk is TRANSPOSED, so it has shape (window_size, dwt_levels) and represents a vector of timestamps,
+        each containing the column vector of the matrix.
+        '''
         reader = csv.reader(open(path, "r"), delimiter=",")
         x = list(reader)
-        result = np.array([x]).astype(np.float32)
-        
+        matrix = np.array([x]).astype(np.float32)
+        result = {}
+        for offset in offsets:
+            chunk = matrix[:, offset:offset+self.window_size].transpose()
+            empty_label = np.zeros(matrix.shape[0])
+            result[offset] = (chunk, empty_label)
+
         return result
 
-    def load_matrix_and_label(self, index: int):
-        annot_filepath = self.annot_files[index]
+    def load_chunks_and_labels(self, batch : list[tuple[str, int]]) -> tuple[np.ndarray, np.ndarray]:
+        '''
+        Load a batch of matrix chunks with corresponding labels, in the same order as in the batch input list.
+        Returns a tuple: the first element is an array of shape (batch_size, window_size, dwt_levels) with all the matrix_chunks;
+        the second element is an array of shape (batch_size, )
+        ''' 
+        #Group all offsets chunks of the same matrix -> open the file one time only
+        groups = {x : [y[1] for y in batch if y[0] == x ] for x in set(map(lambda v : v[0] ,batch))}
+        all_batch_data = {}
 
-        tree = et.parse(annot_filepath)
-        root = tree.getroot()
-        matrix_name :str = root.findtext("filename")
-        matrix_path :str = os.path.join(self.data_path, matrix_name)
-        matrix_width = root.find("size").findtext("width")
+        for annot_filepath, offsets in groups:
+            tree = et.parse(annot_filepath)
+            root = tree.getroot()
+            matrix_name :str = root.findtext("filename")
+            matrix_path :str = os.path.join(self.data_path, matrix_name)
+            matrix_width = root.find("size").findtext("width")
 
-        matrix = self.read_matrix_file(matrix_path)
+            chunks_with_labels = self.read_matrix_chunk_and_prepare_labels(matrix_path, offsets)
+            
+            block_ends = set()
+
+            for member in root.find("boxes").findall("object"):
+                end_x = member.find("bndbox").find("xmax").text
+                #Non c'è la fine di un blocco alla fine di una matrice
+                if end_x != matrix_width:
+                    block_ends.add(end_x)
+            
+            for offset in offsets:
+                for end in block_ends:
+                    if end > offset and end < offset + self.window_size:
+                        chunks_with_labels[offset][1][offset-end] = 1
+            
+            all_batch_data[annot_filepath] = chunks_with_labels
+                
+        chunks = np.zeros((0, self.window_size, self.dwt_levels))
+        labels = np.zeros((0, self.window_size, 1))
+        for path, offset in batch:
+            chunks = np.append(chunks, [all_batch_data[path][offset][0]], axis=0)
+            labels = np.append(labels, [all_batch_data[path][offset][1]], axis=0)
+
+        return chunks, labels
         
-        block_ends = set()
-
-        for member in root.find("boxes").findall("object"):
-            end_x = member.find("bndbox").find("xmax").text
-            #Non c'è la fine di un blocco alla fine di una matrice
-            if end_x != matrix_width:
-                block_ends.add(end_x)
-
-        return matrix, block_ends
-        
-
-    def create_batch_fragments(self, matrix : np.ndarray):
-        pass
 
 
     def __len__(self) -> int:
-        return 0
+        return math.ceil(len(self.all_windows)/self.batch_size)
 
     def __getitem__(self, index : int):
         
-        if self.current_matrix is None:
-            self.current_matrix, self.block_ends = self.load_matrix_and_label(self.current_annot_file_index)
-            self.current_annot_file_index += 1
-            
+        batch_start = index * self.batch_size
+        batch_end = min((index+1)*self.batch_size, len(self.all_windows))
+        batch = self.all_windows[batch_start : batch_end]
+
+        return self.load_chunks_and_labels(batch)
