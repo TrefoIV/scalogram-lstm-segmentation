@@ -40,8 +40,8 @@ def parse_args():
     )
     parser.add_argument(
         "--valid-perc",
-        type=float
-        dest="valid_perc"
+        type=float,
+        dest="valid_perc",
         default=None,
         help="If provided, split the data into train and validation set, according to the given percentage."
     )
