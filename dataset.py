@@ -36,22 +36,24 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
         x = list(reader)
         matrix = np.array(x).astype(np.float32)
         result = {}
-        for offset in offsets:
+        for offset, _ in offsets:
             chunk = matrix[:, offset : (offset+self.window_size)].transpose()
             empty_label = np.zeros((chunk.shape[0], 1))
             result[offset] = (chunk, empty_label)
 
         return result
 
-    def load_chunks_and_labels(self, batch : list[tuple[str, int]]) -> tuple[np.ndarray, np.ndarray]:
+    def load_chunks_and_labels(self, batch : list[tuple[str, list[tuple[int, int]]]]) -> tuple[np.ndarray, np.ndarray]:
         '''
         Load a batch of matrix chunks with corresponding labels, in the same order as in the batch input list.
         Returns a tuple: the first element is an array of shape (batch_size, window_size, dwt_levels) with all the matrix_chunks;
         the second element is an array of shape (batch_size, )
         ''' 
         #Group all offsets chunks of the same matrix -> open the file one time only
-        groups = {x : [y[1] for y in batch if y[0] == x ] for x in set(map(lambda v : v[0] ,batch))}
-        all_batch_data : dict[str, dict[int, tuple[np.ndarray, np.ndarray]]] = {}
+        groups = {x : [(y[1], index) for index,y in enumerate(batch) if y[0] == x ] for x in set(map(lambda v : v[0] ,batch))}
+
+        chunks = np.zeros((len(batch), self.window_size, self.dwt_levels))
+        labels = np.zeros((len(batch), self.window_size, 1))
 
         for annot_filepath, offsets in groups.items():
             tree = et.parse(annot_filepath)
@@ -70,25 +72,13 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
                 if end_x != matrix_width:
                     block_ends.add(end_x)
             
-            for offset in offsets:
+            for offset, index in offsets:
                 for end in block_ends:
                     if end > offset and end < offset + self.window_size:
                         chunks_with_labels[offset][1][end - offset] = 1
+                chunks[index] = chunks_with_labels[offset][0]
+                labels[index] = chunks_with_labels[offset][1]
             
-            all_batch_data[annot_filepath] = chunks_with_labels
-                
-        chunks = np.zeros((0, self.window_size, self.dwt_levels))
-        labels = np.zeros((0, self.window_size, 1))
-        for path, offset in batch:
-            try:
-                chunks = np.append(chunks, [all_batch_data[path][offset][0]], axis=0)
-                labels = np.append(labels, [all_batch_data[path][offset][1]], axis=0)
-            except ValueError as e:
-                print(chunks.shape)
-                print(all_batch_data[path][offset][0].shape)
-                print(labels.shape)
-                print(all_batch_data[path][offset][1].shape)
-                raise e
         return chunks, labels
         
 

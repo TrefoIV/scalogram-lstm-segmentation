@@ -1,2 +1,2 @@
-tensorflow
-pyyaml
+tensorflow==2.12;
+pyyaml;
