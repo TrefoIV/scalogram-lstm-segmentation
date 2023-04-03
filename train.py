@@ -4,6 +4,7 @@ import yaml
 from model_builder import ScalogramSegmentationLSTMModelBuilder
 from dataset import ScalogramMatrixDataset
 from dataset_builder import create_dataset
+import tensorflow as tf
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -51,7 +52,10 @@ def parse_args():
 
 
 def main(args : dict[str, Any]):
-    
+    device_name = tf.test.gpu_device_name()
+    if device_name != "/device:GPU:0":
+        raise RuntimeError("Not found GPU")
+
     NUM_EPOCHS = args["epochs"]
     CONFIG_FILE = args["config"]
     BATCH_SIZE = args["batch_size"]
@@ -65,13 +69,16 @@ def main(args : dict[str, Any]):
     DATA_PATH = configs["DATA_PATH"]
     WINDOW_SIZE = configs["WINDOW_SIZE"]
     DWT_LEVELS = configs["DWT_LEVELS"]
-
-    train_dataset, valid_dataset = create_dataset(DATA_PATH, BATCH_SIZE, WINDOW_SIZE, DWT_LEVELS, SHUFFLE, SPLIT, VALID_PERC)
-    builder = ScalogramSegmentationLSTMModelBuilder(WINDOW_SIZE, DWT_LEVELS)
     
-    model = builder.build_network()
-
-    model.fit(x=train_dataset, validation_data=valid_dataset, epochs=NUM_EPOCHS, verbose=2)
+    with tf.device('/device:GPU:0'):
+        train_dataset, valid_dataset = create_dataset(DATA_PATH, BATCH_SIZE, WINDOW_SIZE, DWT_LEVELS, SHUFFLE, SPLIT, VALID_PERC)
+        print("Dataset loaded")
+        builder = ScalogramSegmentationLSTMModelBuilder(WINDOW_SIZE, DWT_LEVELS)
+        
+        model = builder.build_network()
+        print("Model built")
+        print(model.summary())
+        model.fit(x=train_dataset, validation_data=valid_dataset, epochs=NUM_EPOCHS, verbose=2)
 
 
 if __name__ == "__main__":

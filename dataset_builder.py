@@ -2,7 +2,7 @@ import glob
 import math
 import os
 from xml.etree import ElementTree as et
-from random import shuffle
+import random
 from dataset import ScalogramMatrixDataset
 
 def _read_data_directory(data_path, window_size : int):
@@ -43,6 +43,7 @@ def _read_data_directory(data_path, window_size : int):
             
             for offset in range(width - window_size):
                  all_windows.append((annot_file, offset))
+        return all_windows
 
 
 def create_dataset(path : str,
@@ -52,9 +53,9 @@ def create_dataset(path : str,
                    shuffle : bool, 
                    split : bool, 
                    valid_perc : float = 0.15) -> tuple[ScalogramMatrixDataset, ScalogramMatrixDataset]:
-    all_windows = _read_data_directory(path)
+    all_windows = _read_data_directory(path, window_size)
     if shuffle:
-         shuffle(all_windows)
+        random.shuffle(all_windows)
     train_data = all_windows
     valid_data = []
 
@@ -65,6 +66,6 @@ def create_dataset(path : str,
         train_data = all_windows[:split_index]
         valid_data = all_windows[split_index:]
     
-    train_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, train_data)
-    valid_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, valid_data)
+    train_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, path, train_data)
+    valid_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, path, valid_data)
     return train_dataset, valid_dataset

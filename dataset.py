@@ -14,10 +14,12 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
                  batch_size : int,
                  window_size : int,
                  dwt_levels : int,
+                 data_path : str,
                  data_description : list[tuple[str, int]]):
         self.window_size = window_size
         self.dwt_levels = dwt_levels
         self.batch_size = batch_size
+        self.data_path = data_path
         
         self.all_windows : list[tuple[str, int]] = data_description
 
@@ -32,11 +34,11 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
         '''
         reader = csv.reader(open(path, "r"), delimiter=",")
         x = list(reader)
-        matrix = np.array([x]).astype(np.float32)
+        matrix = np.array(x).astype(np.float32)
         result = {}
         for offset in offsets:
-            chunk = matrix[:, offset:offset+self.window_size].transpose()
-            empty_label = np.zeros(matrix.shape[0])
+            chunk = matrix[:, offset : (offset+self.window_size)].transpose()
+            empty_label = np.zeros((chunk.shape[0], 1))
             result[offset] = (chunk, empty_label)
 
         return result
@@ -49,9 +51,9 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
         ''' 
         #Group all offsets chunks of the same matrix -> open the file one time only
         groups = {x : [y[1] for y in batch if y[0] == x ] for x in set(map(lambda v : v[0] ,batch))}
-        all_batch_data = {}
+        all_batch_data : dict[str, dict[int, tuple[np.ndarray, np.ndarray]]] = {}
 
-        for annot_filepath, offsets in groups:
+        for annot_filepath, offsets in groups.items():
             tree = et.parse(annot_filepath)
             root = tree.getroot()
             matrix_name :str = root.findtext("filename")
@@ -63,7 +65,7 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
             block_ends = set()
 
             for member in root.find("boxes").findall("object"):
-                end_x = member.find("bndbox").find("xmax").text
+                end_x = int(member.find("bndbox").find("xmax").text)
                 #Non c'è la fine di un blocco alla fine di una matrice
                 if end_x != matrix_width:
                     block_ends.add(end_x)
@@ -71,16 +73,22 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
             for offset in offsets:
                 for end in block_ends:
                     if end > offset and end < offset + self.window_size:
-                        chunks_with_labels[offset][1][offset-end] = 1
+                        chunks_with_labels[offset][1][end - offset] = 1
             
             all_batch_data[annot_filepath] = chunks_with_labels
                 
         chunks = np.zeros((0, self.window_size, self.dwt_levels))
         labels = np.zeros((0, self.window_size, 1))
         for path, offset in batch:
-            chunks = np.append(chunks, [all_batch_data[path][offset][0]], axis=0)
-            labels = np.append(labels, [all_batch_data[path][offset][1]], axis=0)
-
+            try:
+                chunks = np.append(chunks, [all_batch_data[path][offset][0]], axis=0)
+                labels = np.append(labels, [all_batch_data[path][offset][1]], axis=0)
+            except ValueError as e:
+                print(chunks.shape)
+                print(all_batch_data[path][offset][0].shape)
+                print(labels.shape)
+                print(all_batch_data[path][offset][1].shape)
+                raise e
         return chunks, labels
         
 
