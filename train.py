@@ -6,6 +6,7 @@ from model_builder import ScalogramSegmentationLSTMModelBuilder
 from dataset import ScalogramMatrixDataset
 from dataset_builder import create_dataset
 import tensorflow as tf
+import os
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -33,7 +34,7 @@ def parse_args():
         default=None,
         type=str,
         dest='project_name',
-        help='training result dir name in outputs/training/, (default res_#).'
+        help='training result dir name in outputs/project_name.'
     )
     parser.add_argument(
         "--shuffle",
@@ -62,7 +63,10 @@ def main(args : dict[str, Any]):
     BATCH_SIZE = args["batch_size"]
     SHUFFLE = args["shuffle"]
     VALID_PERC = args["valid_perc"]
+    PROJECT_NAME = args["project_name"]
     SPLIT = VALID_PERC != None
+    if not os.path.isdir(f"outputs/{PROJECT_NAME}"):
+        os.mkdir(f"outputs/{PROJECT_NAME}")
 
     with open(CONFIG_FILE, "r") as f:
         configs = yaml.safe_load(f)
@@ -87,13 +91,13 @@ def main(args : dict[str, Any]):
 
         callback_list = [
             keras.callbacks.EarlyStopping(monitor = "val_loss", patience=2),
-            keras.callbacks.ModelCheckpoint("outputs/model/model-{epoch:02d}.hdf5", verbose = 2, monitor ="accuracy")
+            keras.callbacks.ModelCheckpoint(f"outputs/{PROJECT_NAME}"+"/model/model-{epoch:02d}.hdf5", verbose = 2, monitor ="accuracy")
         ]
 
         model.fit(x=train_dataset, validation_data=valid_dataset, epochs=NUM_EPOCHS, verbose=2, callbacks=callback_list)
 
         #Stampa un file di testo contenente la inference calcolata su dei dati di test
-        with open("outputs/inference/results.txt", "w") as f:
+        with open(f"outputs/{PROJECT_NAME}/inference/results.txt", "w") as f:
             for num_batch in range(len(test_data)):
                 chunks, labels = test_data[num_batch]
 
