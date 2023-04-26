@@ -78,7 +78,8 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
                         chunks_with_labels[offset][1][end - offset] = 1
                 chunks[index] = chunks_with_labels[offset][0]
                 labels[index] = chunks_with_labels[offset][1]
-            
+        print("chunk-shape", chunks.shape)
+        print("labels-shape", labels.shape)  
         return chunks, labels
         
 
@@ -89,7 +90,7 @@ class ScalogramMatrixDataset(keras.utils.Sequence):
     def __getitem__(self, index : int):
         
         batch_start = index * self.batch_size
-        batch_end = min((index+1)*self.batch_size, len(self.all_windows))
+        batch_end = min(batch_start+self.batch_size, len(self.all_windows))
         batch = self.all_windows[batch_start : batch_end]
 
         return self.load_chunks_and_labels(batch)

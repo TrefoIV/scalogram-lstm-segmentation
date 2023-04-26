@@ -23,13 +23,13 @@ def _read_data_directory(data_path, window_size : int):
             image_path = os.path.join(data_path, image_name)
             discard_path = False
             if not os.path.exists(image_path):
-                print(f"Image {image_path} associated to {path} not found...")
+                print(f"Matrix {image_path} associated to {path} not found...")
                 print(f"Discarding {path}...")
                 discard_path = True
 
             return not discard_path
 
-        #Filtra gli xml non correttamente formattati e quelli che non hanno l'immagine corrispondente (capiterà?)
+        #Filtra gli xml non correttamente formattati e quelli che non hanno la matrice corrispondente (capiterà?)
         annot_files = list(filter(check_path, all_annotations))
         print(f"XML INVALIDI: {invalid_xml}")
 
@@ -41,7 +41,7 @@ def _read_data_directory(data_path, window_size : int):
             if width < window_size:
                 raise ValueError(f"Width {width} of file {annot_file} is less than window_size {window_size}")
             
-            for offset in range(width - window_size):
+            for offset in range(width - (window_size-1)):
                  all_windows.append((annot_file, offset))
         return all_windows
 
@@ -62,10 +62,10 @@ def create_dataset(path : str,
     if split:
         if valid_perc < 0 or valid_perc >= 1:
              raise ValueError(f"Split percentage must be a float from 0 to 1, got {valid_perc}")
-        split_index = math.floor(len(all_windows) * valid_perc)
+        split_index = math.floor(len(all_windows) * (1 - valid_perc))
         train_data = all_windows[:split_index]
         valid_data = all_windows[split_index:]
-    
+
     train_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, path, train_data)
     valid_dataset = ScalogramMatrixDataset(batch_size, window_size, dwt_levels, path, valid_data)
     return train_dataset, valid_dataset
