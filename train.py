@@ -56,7 +56,7 @@ def parse_args():
 def main(args : dict[str, Any]):
     device_name = tf.test.gpu_device_name()
     if device_name != "/device:GPU:0":
-        raise RuntimeError("Not found GPU")
+        raise RuntimeError(f"Not found GPU. Device name is {device_name}")
 
     NUM_EPOCHS = args["epochs"]
     CONFIG_FILE = args["config"]
